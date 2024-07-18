@@ -1,0 +1,343 @@
+---
+title: "Bellabeat Markdown"
+author: "Sean Bynum"
+date: "2024-07-04"
+output:
+  html_document:
+    toc: true
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r echo=FALSE, out.width="100%"}
+knitr::include_graphics("Bellabeat_Logo.png", error = FALSE)
+```
+
+
+## The Scenario
+
+You are a junior data analyst working on the marketing analyst team at Bellabeat, a high-tech manufacturer of health-focused products for women. Bellabeat is a successful small company, but they have the potential to become a larger player in the global smart device market. Urška Sršen, cofounder and Chief Creative Officer of Bellabeat, believes that analyzing smart device fitness data could help unlock new growth opportunities for the company. You have been asked to focus on one of Bellabeat’s products and analyze smart device data to gain insight into how consumers are using their smart devices.The insights you discover will then help guide marketing strategy for the company. You will present your analysis to the Bellabeat executive team along with your high-level recommendations for Bellabeat’s marketing strategy.
+
+## The Products
+
+-   **Bellabeat app:** The Bellabeat app provides users with health data related to their activity, sleep, stress, menstrual cycle, and mindfulness habits. This data can help users better understand their current habits and make healthy decisions. The Bellabeat app connects to their line of smart wellness products.
+-   **Leaf:** Bellabeat’s classic wellness tracker can be worn as a bracelet, necklace, or clip. The Leaf tracker connects to the Bellabeat app to track activity, sleep, and stress.
+-   **Time:** This wellness watch combines the timeless look of a classic timepiece with smart technology to track user activity, sleep, and stress. The Time watch connects to the Bellabeat app to provide you with insights into your daily wellness.
+-   **Spring:** This is a water bottle that tracks daily water intake using smart technology to ensure that you are appropriately hydrated throughout the day. The Spring bottle connects to the Bellabeat app to track your hydration levels.
+-   **Bellabeat membership:** Bellabeat also offers a subscription-based membership program for users. Membership gives users 24/7 access to fully personalized guidance on nutrition, activity, sleep, health and beauty, and mindfulness based on their lifestyle and goals.
+
+## The Ask
+
+1.  What are some trends in smart device usage?
+2.  How could these trends apply to Bellabeat customers?
+3.  How could these trends help influence Bellabeat marketing strategy?
+
+
+## The Preparations
+
+We are asked to use the data sets available at <https://www.kaggle.com/datasets/arashnic/fitbit> for the analysis. We are also encouraged to use supplemental data sets that could possibly help with the overall process.
+
+## The Process
+
+### Loading Up Tidyverse
+
+The first thing that needed to be done was to load the packages required for this project.In this case, Tidyverse. I also wanted to add ggpubr for visual purposes.
+
+```{r echo=TRUE}
+library(tidyverse)
+library(cowplot)
+```
+
+
+### Importing The Datasets
+
+We then needed to import data sets we downloaded from Kaggle. I decided to use the ones below as I wanted to focus on a daily time frame rather than by the hour or minute. I also made the decision to add the weight log as weight is a keystone factor to overall health.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+daily_activity <- read_csv("dailyActivity_merged.csv")
+daily_calories <- read_csv("dailyCalories_merged.csv")
+daily_intensities <- read_csv("dailyIntensities_merged.csv")
+daily_steps <- read_csv("dailySteps_merged.csv")
+daily_sleep <- read_csv("sleepDay_merged.csv")
+weight_log <- read_csv("weightLogInfo_merged.csv")
+```
+
+### Data Inspection
+
+It was time to have a look at the data to see how it needed to be formatted. First, I wanted to look at the column names to see where our data frames overlap.
+
+```{r echo=TRUE}
+head(daily_activity)
+head(daily_calories)
+head(daily_intensities)
+head(daily_steps)
+head(daily_sleep)
+head(weight_log)
+```
+
+
+
+I then decided to check the structure of the data frames to see if any needed to be changed so that overlapping columns can be merged.
+```{r echo=TRUE}
+str(daily_activity)
+str(daily_calories)
+str(daily_intensities)
+str(daily_steps)
+str(daily_sleep)
+str(weight_log)
+```
+
+We can clearly see that they all share the "ID" Column. I wanted to then see how many unique ones are in each of the data frames.
+
+```{r echo=TRUE}
+n_distinct(daily_activity$Id)
+n_distinct(daily_calories$Id)
+n_distinct(daily_intensities$Id)
+n_distinct(daily_steps$Id)
+n_distinct(daily_sleep$Id)
+n_distinct(weight_log$Id)
+```
+### Cleaning the Data
+
+Duplicates and NA rows were removed.It became apparent after this step that the daily_calories, daily_intensities, and daily_steps data frames did not provide any unique data columns or rows that weren't already in the daily_activity data frame. I suspected this, however, I wanted to be sure. They were no longer needed to proceed.
+
+```{r echo=TRUE}
+daily_activity <- daily_activity %>%
+  distinct() %>%
+  drop_na()
+
+daily_calories <- daily_calories %>%
+  distinct() %>%
+  drop_na()
+
+daily_intensities <- daily_intensities %>%
+  distinct() %>%
+  drop_na()
+
+daily_steps <- daily_steps %>%
+  distinct() %>%
+  drop_na()
+
+daily_sleep <- daily_sleep %>%
+  distinct() %>%
+  drop_na()
+
+weight_log <- weight_log %>%
+  distinct()
+```
+
+
+### Renaming/Reformatting the Data
+
+Changed the names and formats for columns in each data frame for uniformity.
+
+```{r echo=TRUE}
+daily_activity <- daily_activity %>%
+  mutate(ActivityDate = as_date(ActivityDate, format = "%m/%d/%Y"))
+
+daily_sleep <- daily_sleep %>%
+  rename (ActivityDate = SleepDay) %>%
+  mutate(ActivityDate = as_date(ActivityDate, format = "%m/%d/%Y %I:%M:%S %p"))
+
+weight_log <- weight_log %>%
+  rename (ActivityDate = Date) %>%
+mutate(ActivityDate = as.POSIXct(ActivityDate, format = "%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())) %>%
+  separate(ActivityDate,into=c("ActivityDate","Time"),sep=" ") %>%
+  mutate(ActivityDate = as_date(ActivityDate))
+```
+
+### Summaraizing Each Data Frame
+
+It was time to take a large scope look at all the data frames.
+
+```{r echo=TRUE}
+summary(daily_activity)
+summary(daily_sleep)
+summary(weight_log)
+```
+
+### Merging the Data
+
+It was time to merge the data frames for different analyses. I wanted to see the relationship between the activity and sleep variables to observe any possible correlations when merging the two data frames. I also wanted to merge all the data frames that share the same observations but with different variables. 
+
+```{r echo=TRUE}
+activity_sleep_merged <- merge(daily_sleep, daily_activity, by = c("Id", "ActivityDate"))
+
+weight_activity_sleep_merged <- merge(weight_log, activity_sleep_merged, by = c("Id", "ActivityDate"))
+```
+
+I also wanted to add a "month" and "day of the week column" based on the ActivityDate column for each data frame.
+```{r}
+daily_activity$Month <- format(as.Date(daily_activity$ActivityDate), "%m")
+daily_activity$DayofWeek <- format(as.Date(daily_activity$ActivityDate), "%A")
+activity_sleep_merged$Month <- format(as.Date(activity_sleep_merged$ActivityDate), "%m")
+activity_sleep_merged$DayofWeek <- format(as.Date(activity_sleep_merged$ActivityDate), "%A")
+weight_activity_sleep_merged$Month <- format(as.Date(weight_activity_sleep_merged$ActivityDate), "%m")
+weight_activity_sleep_merged$DayofWeek <- format(as.Date(weight_activity_sleep_merged$ActivityDate), "%A")
+weight_log$Month <- format(as.Date(weight_log$ActivityDate), "%m")
+weight_log$DayofWeek <- format(as.Date(weight_log$ActivityDate), "%A")
+```
+
+
+Additionally, I wanted to see averages of different areas broken down by day.
+```{r}
+day_of_week_averages <- daily_activity %>% 
+  mutate(DayofWeek = wday(ActivityDate, label = TRUE)) %>%  
+  group_by(DayofWeek) %>% 
+  summarise(AverageSteps = mean(TotalSteps), AverageDistance = mean(TotalDistance), AverageCalories = mean(Calories), AverageSedentaryHours = mean(SedentaryMinutes)/60, AverageLightHours = mean(LightlyActiveMinutes)/60, AverageFairHours = mean(FairlyActiveMinutes)/60, AverageVeryHours = mean(VeryActiveMinutes)/60) %>%
+  arrange(DayofWeek)
+
+day_of_week_sleep <- activity_sleep_merged %>% 
+  mutate(DayofWeek = wday(ActivityDate, label = TRUE)) %>%  
+  group_by(DayofWeek) %>% 
+  summarise(AverageSleepHours = mean(TotalMinutesAsleep)/60, AverageTimeInBed = mean(TotalTimeInBed)/60) %>%
+  arrange(DayofWeek)
+```
+
+
+## The Analysis
+
+It was time to finally make some observations of the cleaned and merged data frames. I first wanted to look at the summary of each. I was also interested in having a look at how many unique participants logged everything including their weight.
+
+```{r echo=TRUE}
+summary(daily_activity)
+
+summary(activity_sleep_merged)
+
+summary(weight_activity_sleep_merged)
+
+n_distinct(weight_activity_sleep_merged$Id)
+
+n_distinct(activity_sleep_merged$Id)
+```
+
+### Initial Observations
+
+* Participants would be considered "lightly active" on average based on active minutes.
+* Participants are non-active for 16.5 hours per day on average.
+* Participants get 7 hours of sleep per day on average.
+* Participants spend 7 hours and 38 minutes in bed on average.
+* Participants take approximately 7638 steps per day on average.
+* Participants burn 2304 calories per day on average.
+* Only 8 participants logged their weight. Of the 8, only 5 also logged their activity and sleep.
+
+### Hypotheses
+
+* The more active the participants are, the more calories they will burn.
+* The higher the step count, the higher the calorie burn per day.
+* Weekdays will yield a higher average calorie burn rate than weekends.
+* Sunday will likely yield the lowest activity and highest sleep rate on average.
+
+### Data Plotting
+
+```{r echo=FALSE, message=FALSE}
+
+sedentary_sleep <- ggplot(data=activity_sleep_merged, aes(x=TotalMinutesAsleep, y=SedentaryMinutes)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Minutes Asleep' , y = 'Non-Active Minutes')
+
+lightly_active_sleep <- ggplot(data=activity_sleep_merged, aes(x=TotalMinutesAsleep, y=LightlyActiveMinutes)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Minutes Asleep' , y = 'Lightly Active Minutes')
+
+fairly_active_sleep <- ggplot(data=activity_sleep_merged, aes(x=TotalMinutesAsleep, y=FairlyActiveMinutes)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Minutes Asleep' , y = 'Fairly Active Minutes')
+
+very_active_sleep <- ggplot(data=activity_sleep_merged, aes(x=TotalMinutesAsleep, y=VeryActiveMinutes)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Minutes Asleep' , y = 'Very Active Minutes')
+
+plot_grid(sedentary_sleep, lightly_active_sleep, fairly_active_sleep, very_active_sleep, align = "hv")
+```
+
+I wanted to have a look at this first as I was curious to see if there was any correlation between activity level and if it had an impact on the amount of sleep participants received after. This analysis shows possible correlation but extensive data beyond the scope of this project would be needed.
+<br>
+<br>
+<br>
+<br>
+<br>
+```{r echo=FALSE, message=FALSE}
+ggplot(data=daily_activity, aes(x=TotalSteps, y=Calories)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (title = 'Calories Burned by Steps Taken Per Day', x = 'Total Steps', y = 'Calories')
+```
+
+There is a direct, positive correlation between calories burned and total steps taken per day. The more steps taken the more calories burned. 
+<br>
+<br>
+<br>
+<br>
+```{r echo=FALSE, message=FALSE}
+sedentary_calories <- ggplot(data=daily_activity, aes(x=SedentaryMinutes, y=Calories)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Non-Active Minutes', y = 'Calories Burned')
+
+lightly_active_calories <- ggplot(data=daily_activity, aes(x=LightlyActiveMinutes, y=Calories)) + 
+  geom_point() + geom_smooth() +
+  labs (x = 'Lightly Active Minutes', y = 'Calories Burned')
+
+fairly_active_calories <- ggplot(data=daily_activity, aes(x=FairlyActiveMinutes, y=Calories)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Fairly Active Minutes', y = 'Calories Burned')
+
+very_active_calories <- ggplot(data=daily_activity, aes(x=VeryActiveMinutes, y=Calories)) + 
+  geom_point() + 
+  geom_smooth() +
+  labs (x = 'Very Active Minutes', y = 'Calories Burned')
+
+plot_grid(sedentary_calories, lightly_active_calories, fairly_active_calories, very_active_calories, align = "hv")
+```
+
+We can see that there is a positive impact on calories burned the more the activity level is raised. In fact, the amount of calories burned increases dramatically with each tier.
+<br>
+<br>
+<br>
+<br>
+```{r}
+  ggplot(data=day_of_week_averages, aes(x = DayofWeek, y = AverageSteps, fill = AverageCalories)) + 
+  geom_col() +
+  labs (title = 'Average Steps Taken by Day of the Week', x = '',  y = 'Average Steps Taken', fill = 'Avg Calories Burned')
+
+  ggplot(data=day_of_week_sleep, aes(x = DayofWeek, y = AverageSleepHours, fill = AverageTimeInBed)) + 
+  geom_col() +
+  labs (title = 'Average Sleep Hours by Day of the Week', x = '',  y = 'Average Sleep Hours', fill = 'Average Time In Bed')
+```
+
+The data shows that Tuesdays and Saturdays were the best days for steps taken for the participants, both yielding an average step rate of just north of 8100. Because there is a strong correlation  between steps taken and calories burned, these were also the best days for that. Sundays were they days of least steps taken at a rate of just over 6900 on average. However, even at a rate of about 7400 steps on average, Thursday yielded the lowest average calorie burn. 
+
+It also  may come as no surprise that participants slept the most on Sundays, where participants slept about 7.5 hours on average. However, it is interesting to note that people also spent the most time in bed on Sundays as well, at a rate of about 51 minutes on average when not sleeping.
+<br>
+<br>
+<br>
+<br>
+
+## Findings Summary
+
+* For activity data, there were 33 participants. On average, the participants were mostly "lightly active" when they were active at all. They took approximately 7638 steps per day for an average distance of about 5.5 miles. The highest days for activity were Tuesdays and Saturdays.
+
+* We observed that there is a strong correlation between the number of steps taken and calories burned. On top of that, the higher the intensity level of activity, the higher the calorie burn. The biggest calorie burn difference is between sedentary(non-active) and being lightly active. You can burn calories 3 to 5 times faster being just lightly active than in the same amount of time of not being active at all.
+
+* For sleep data, there were 24 participants. They slept an average of 7 hours per day. Sundays, however, showed the highest average sleep rate of 7.5 hours. Sunday was also the day that participants spent the most of time in bed when not asleep at a rate of 51 minutes on average.
+
+* The data also shows possible, positive correlation between activity levels and sleep minutes but more research would be needed beyond the scope of this analysis.
+
+* Only 8 participants in total reported their weight, only 5 of which overlap with reporting their activity and sleep data.
+
+## Recommendations
+
+* Increase notifications for daily step goals. General consensus is that 10,000 steps daily are a good average for people to shoot for in overall health. Aiming for people to reach this goal can be done incrementally (depending on person's daily performance) until people feel comfortable reaching it each day. Even increasing the average of 7600 to 8500 steps per day could yield dramatic improvement to health. As Sunday is the day of most inactivity for users, it might be worth exploring pushing more notifications than usual on this day.
+
+* Create activity programs within the app that educate and encourage an increase in activity levels, particularly on the dramatic calories burn increase that occurs between non-activity and just light activity. This could really appeal to more skeptical, non-active customers on a pragmatic level.
+
+* Find ways to positively reinforce weight reporting daily within the app. This data is far too limited due to participant's unwillingness to report it. This is essential for users to be fully aware of their health performance on a daily basis.
